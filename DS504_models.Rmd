@@ -9,7 +9,7 @@ output:
 #library(knitr)
 ```
 ---
-title: "HW6: DS502"
+title: "DS504"
 author: "Danielle Angelini"
 output:
   html_document:
