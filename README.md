@@ -4,7 +4,7 @@ This project aims to use classification models such as logistic regression, rand
 
 Kaggle dataset: https://www.kaggle.com/datasets/nathanlauga/nba-games/code
 
-Original Dataset files: games.csv, rankings.csv, master_games_old.csv (join between the games and rankings files)
+Original Dataset files: games.csv, ranking.csv, master_games_old.csv (join between the games and ranking files)
 
 Code to create model input: DS504_master_games.rmd
 
