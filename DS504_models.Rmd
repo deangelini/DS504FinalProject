@@ -1,0 +1,621 @@
+---
+output:
+  html_document:
+    latex_engine: xelatex
+  pdf_document: 
+    latex_engine: xelatex
+---
+```{r}
+#library(knitr)
+```
+---
+title: "HW6: DS502"
+author: "Danielle Angelini"
+output:
+  html_document:
+    latex_engine: xelatex
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+#Reading in master_games
+```{r}
+master_games_csv = "C:/Users/deang/Documents/DS504/Project/master_games.csv"
+master_games_read = read.csv(master_games_csv)
+master_games = as.data.frame(master_games_read)
+```
+
+```{r}
+summary(master_games)
+```
+
+```{r}
+#Correlations
+correlations = cor(master_games[sapply(master_games,is.numeric)])
+correlations[correlations < 0.75 | correlations ==1] <- ""
+print(correlations)
+```
+
+
+```{r}
+library(dplyr)
+master_games$GAME_DATE_EST = format(as.Date(master_games$GAME_DATE_EST), "%Y%m%d") 
+```
+
+```{r}
+master_games$GAME_DATE_EST = as.numeric(master_games$GAME_DATE_EST)
+```
+
+#Splitting into Test and Train Set
+```{r}
+library(dplyr)
+library(lubridate)
+set.seed(1)
+#Shuffle data
+rows = sample(nrow(master_games))
+master_games_shuffle = master_games[rows,]
+
+train = master_games_shuffle[1:16710, ] 
+train = train %>% arrange(desc(ymd(train$GAME_DATE_EST)))
+
+test = master_games_shuffle[16711:23872, ]
+test = test %>% arrange(desc(ymd(test$GAME_DATE_EST)))
+```
+
+```{r}
+#Scale data for Log and SVM
+library(dplyr)
+train_log = train
+test_log = test
+train_log[,-44] <- scale(train[,-44]) 
+test_log[,-44] <- scale(test[,-44]) 
+
+#train = train %>% mutate_all(~(scale(.) %>% as.vector)) 
+#test = test %>% mutate_all(~(scale(.) %>% as.vector))
+```
+
+```{r}
+#Not scaled
+X.train = train[, -44]
+Y.train = train[, 44]
+X.test = test[, -44]
+Y.test = test[, 44]
+```
+
+#Exploratory Data Analysis (cont)
+
+```{r}
+plot_ast_pt_h = plot(x = master_games$AVG_AST_DIF_HOME, y = master_games$AVG_PT_DIF_HOME, col = "#66CCCC", pch = 18, xlab = "Avg Assist Difference", ylab = "Avg Point Difference", main = "Avg Assist vs Point Difference for Home Teams")
+abline(lm( master_games$AVG_PT_DIF_HOME ~ master_games$AVG_AST_DIF_HOME))
+
+plot_ast_pt_a = plot(x = master_games$AVG_AST_DIF_AWAY, y = master_games$AVG_PT_DIF_AWAY, col = "#66CCCC", pch = 18, xlab = "Avg Assist Difference", ylab = "Avg Point Difference", main = "Avg Assist vs Point Difference for Visitor Teams")
+abline(lm( master_games$AVG_PT_DIF_AWAY ~ master_games$AVG_AST_DIF_AWAY))
+
+plot_reb_pt_h = plot(x = master_games$AVG_REB_DIF_HOME, y = master_games$AVG_PT_DIF_HOME, col = "#66CCCC", pch = 18, xlab = "Avg Rebound Difference", ylab = "Avg Point Difference", main = "Avg Rebound vs Point Difference for Home Teams")
+abline(lm( master_games$AVG_PT_DIF_HOME ~ master_games$AVG_REB_DIF_HOME))
+
+plot_reb_pt_a = plot(x = master_games$AVG_REB_DIF_AWAY, y = master_games$AVG_PT_DIF_AWAY, col = "#66CCCC", pch = 18, xlab = "Avg Rebound Difference", ylab = "Avg Point Difference", main = "Avg Rebound vs Point Difference for Visitor Teams")
+abline(lm( master_games$AVG_PT_DIF_AWAY ~ master_games$AVG_REB_DIF_AWAY))
+
+```
+
+```{r}
+summary(lm( master_games$AVG_PT_DIF_HOME ~ master_games$AVG_AST_DIF_HOME))$coefficients
+summary(lm( master_games$AVG_PT_DIF_AWAY ~ master_games$AVG_AST_DIF_AWAY))$coefficients
+summary(lm( master_games$AVG_PT_DIF_HOME ~ master_games$AVG_REB_DIF_HOME))$coefficients
+summary(lm( master_games$AVG_PT_DIF_AWAY ~ master_games$AVG_REB_DIF_AWAY))$coefficients
+```
+
+```{r}
+plot_ft_pt_h = plot(x = master_games$AVG_FT_PCT_HOME, y = master_games$AVG_PT_DIF_HOME, col = "#66CCCC", pch = 18, xlab = "Avg Free Throw %", ylab = "Avg Point Difference", main = "Avg FT % vs Point Difference for Home Teams")
+
+plot_ft_pt_a = plot(x = master_games$AVG_FT_PCT_AWAY, y = master_games$AVG_PT_DIF_AWAY, col = "#66CCCC", pch = 18, xlab = "Avg Free Throw %", ylab = "Avg Point Difference", main = "Avg FT % vs Point Difference for Visitor Teams")
+
+plot_fg3_pt_h = plot(x = master_games$AVG_FG3_PCT_HOME, y = master_games$AVG_PT_DIF_HOME, col = "#66CCCC", pch = 18, xlab = "Avg 3 Pointer %", ylab = "Avg Point Difference", main = "Avg FG3 % vs Point Difference for Home Teams")
+abline(lm( master_games$AVG_PT_DIF_HOME ~ master_games$AVG_FG3_PCT_HOME))
+
+plot_fg3_pt_a = plot(x = master_games$AVG_FG3_PCT_AWAY, y = master_games$AVG_PT_DIF_AWAY, col = "#66CCCC", pch = 18, xlab = "Avg 3 Pointer %", ylab = "Avg Point Difference", main = "Avg FG3 % vs Point Difference for Visitor Teams")
+abline(lm( master_games$AVG_PT_DIF_AWAY ~ master_games$AVG_FG3_PCT_AWAY))
+
+plot_fg3_pt_h = plot(x = master_games$AVG_FG_PCT_HOME, y = master_games$AVG_PT_DIF_HOME, col = "#66CCCC", pch = 18, xlab = "Avg Field Goal %", ylab = "Avg Point Difference", main = "Avg FG % vs Point Difference for Home Teams")
+
+plot_fg3_pt_a = plot(x = master_games$AVG_FG_PCT_AWAY, y = master_games$AVG_PT_DIF_AWAY, col = "#66CCCC", pch = 18, xlab = "Avg Field Goal %", ylab = "Avg Point Difference", main = "Avg FG % vs Point Difference for Visitor Teams")
+```
+
+```{r}
+cor(master_games$AVG_PT_DIF_HOME, master_games$AVG_FT_PCT_HOME)
+cor(master_games$AVG_PT_DIF_AWAY, master_games$AVG_FT_PCT_AWAY)
+cor(master_games$AVG_PT_DIF_HOME, master_games$AVG_FG3_PCT_HOME)
+cor(master_games$AVG_PT_DIF_AWAY, master_games$AVG_FG3_PCT_AWAY)
+cor(master_games$AVG_PT_DIF_HOME, master_games$AVG_FG_PCT_HOME)
+cor(master_games$AVG_PT_DIF_AWAY, master_games$AVG_FG_PCT_AWAY)
+```
+#Model Building
+```{r}
+#Logistic Regression
+library(stats)
+set.seed(1)
+log_fit_base = glm(HOME_TEAM_WINS ~ ., data = train_log, family = "binomial")
+summary(log_fit_base)
+
+#Significant predictor variables after outlier detection:
+# *** HT_HOME_W_PCT, AVG_PT_DIF_HOME, AT_ROAD_W_PCT, AVG_PT_DIF_AWAY
+# ** AVG_AST_DIF_HOME
+# * GAME_DATE_EST, TOT_AST_HOME
+# . SEASON, TOT_REB_HOME, REBLast3_Home, AVG_FG3_PCT_AWAY, PTLast3_Away, FG_PCTLast3_Away
+
+```
+
+```{r}
+#Testing for Multicollinearity
+library(regclass)
+vif_values = VIF(log_fit_base)
+
+barplot(vif_values, main = "VIF Values for MultiCollinearity", horiz = TRUE, col = "lightblue")
+abline(v = 5, lwd = 3, lty = 2, col = "red")
+
+print(vif_values)
+
+#High Multicollinearity:
+# GAME_DATE_EST, HT_HOME_W_PCT, HT_ROAD_W_PCT, HT_W_PCT, TOT_PTS_HOME, SEASON*, HT_G, TOT_REB_HOME, PTLast3_Home, AT_G, FG_PCTLast3_Home, AT_W_PCT, AT_HOME_W_PCT, AT_ROAD_W_PCT, TOT_PTS_AWAY, TOT_AST_AWAY, TOT_REB_AWAY
+
+#Really High Multicollinearity:
+#GAME_DATE_EST, SEASON, HT_G, AT_G, TOT_PTS_AWAY, TOT_PTS_HOME, TOT_REB_HOME, TOT_AST_HOME, TOT_REB_AWAY, TOT_AST_AWAY
+```
+
+```{r}
+library(boot)
+set.seed(1)
+#10-fold-cv
+cv_error_10=rep(0,10)
+for (i in 1:10){
+  log_fit = glm(HOME_TEAM_WINS ~ poly(AVG_AST_DIF_HOME,i), data = train_log)
+  cv_error_10[i] = cv.glm(train_log, log_fit, K = 10)$delta[1]
+}
+degree = 1:10
+plot(degree, cv_error_10, xlab = "Degree", ylab = "CV Error", type = "l")
+min = which.min(cv_error_10)
+points(min, cv_error_10[min], col = "green", cex = 2, pch = 20)
+
+#Degree of 6 or 9 for AVG_PT_DIF_HOME
+#Degree of 3 for AVG_PT_DIF_AWAY
+#Degree of 4 for HT_HOME_W_PCT
+#Degree of 3 for AT_ROAD_W_PCT
+#Degree of 1 for AVG_AST_DIF_HOME
+```
+
+```{r}
+#Base Model
+set.seed(1)
+log_prob_base = ifelse(predict(log_fit_base, test_log, type = "response") > 0.5, 1, 0)
+table_log_base = table(pred = log_prob_base, actual = test_log$HOME_TEAM_WINS)
+
+mse_log_base = (table_log_base[1,2] + table_log_base[2,1]) / (table_log_base[1,1] + table_log_base[1,2] + table_log_base[2,1] + table_log_base[2,2])
+
+accuracy_log_base = mean(log_prob_base == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Base Log Reg: ", round(mse_log_base,4)))
+print(table_log_base)
+print(paste("Base Log Reg Accuracy: ", round(accuracy_log_base,4)))
+
+
+```
+
+```{r}
+#Variation 1
+set.seed(1)
+#log_fit_2 = glm(HOME_TEAM_WINS ~ . + poly(HT_HOME_W_PCT, 4), data = train_log, family = "binomial")
+#log_fit_2 = glm(HOME_TEAM_WINS ~ . + poly(AVG_PT_DIF_HOME, 6), data = train_log, family = "binomial")
+log_fit_2 = glm(HOME_TEAM_WINS ~ . + poly(AVG_PT_DIF_AWAY, 3), data = train_log, family = "binomial")
+log_prob_2 = ifelse(predict(log_fit_2, test_log, type = "response") > 0.5, 1, 0)
+table_log_2 = table(pred = log_prob_2, actual = test_log$HOME_TEAM_WINS)
+
+mse_log_2 = (table_log_2[1,2] + table_log_2[2,1]) / (table_log_2[1,1] + table_log_2[1,2] + table_log_2[2,1] + table_log_2[2,2])
+
+accuracy_log_2 = mean(log_prob_2 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Log Reg with Degrees: ", round(mse_log_2,4)))
+print(table_log_2)
+print(paste("Log Reg Accuracy with Degrees: ", round(accuracy_log_2,4)))
+```
+
+```{r}
+#Variation 2 - Removing High Multicollinearity
+set.seed(1)
+log_fit_3 = glm(HOME_TEAM_WINS ~ . - GAME_DATE_EST - SEASON - HT_G - AT_G - TOT_PTS_AWAY -  TOT_PTS_HOME - TOT_REB_HOME - TOT_AST_HOME - TOT_REB_AWAY - TOT_AST_AWAY, data = train_log, family = "binomial")
+
+log_prob_3 = ifelse(predict(log_fit_3, test_log, type = "response") > 0.5, 1, 0)
+table_log_3 = table(pred = log_prob_3, actual = test_log$HOME_TEAM_WINS)
+
+mse_log_3 = (table_log_3[1,2] + table_log_3[2,1]) / (table_log_3[1,1] + table_log_3[1,2] + table_log_3[2,1] + table_log_3[2,2])
+
+accuracy_log_3 = mean(log_prob_3 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Log Reg  - Multicollinearity: ", round(mse_log_3,4)))
+print(table_log_3)
+print(paste("Log Reg - Multicollinearity Accuracy: ", round(accuracy_log_3,4)))
+```
+
+```{r}
+#Variation 3 - Removing All Multicollinearity
+set.seed(1)
+log_fit_4 = glm(HOME_TEAM_WINS ~ . - GAME_DATE_EST - HT_HOME_W_PCT - HT_ROAD_W_PCT - HT_W_PCT - TOT_PTS_HOME - SEASON - HT_G - TOT_REB_HOME - PTLast3_Home - AT_G - FG_PCTLast3_Home - AT_W_PCT - AT_HOME_W_PCT - AT_ROAD_W_PCT - TOT_PTS_AWAY - TOT_AST_AWAY - TOT_REB_AWAY, data = train_log, family = "binomial")
+
+log_prob_4 = ifelse(predict(log_fit_4, test_log, type = "response") > 0.5, 1, 0)
+table_log_4 = table(pred = log_prob_4, actual = test_log$HOME_TEAM_WINS)
+
+mse_log_4 = (table_log_4[1,2] + table_log_4[2,1]) / (table_log_4[1,1] + table_log_4[1,2] + table_log_4[2,1] + table_log_4[2,2])
+
+accuracy_log_4 = mean(log_prob_4 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Log Reg  - All Multicollinearity: ", round(mse_log_4,4)))
+print(table_log_4)
+print(paste("Log Reg - All Multicollinearity Accuracy: ", round(accuracy_log_4,4)))
+```
+
+```{r}
+#Random Forest
+train_rf = train
+test_rf = test
+train_rf$HOME_TEAM_WINS <- as.character(train_rf$HOME_TEAM_WINS)
+train_rf$HOME_TEAM_WINS <- as.factor(train_rf$HOME_TEAM_WINS)
+test_rf$HOME_TEAM_WINS <- as.character(test_rf$HOME_TEAM_WINS)
+test_rf$HOME_TEAM_WINS <- as.factor(test_rf$HOME_TEAM_WINS)
+```
+
+```{r}
+library(randomForest)
+set.seed(1)
+mse_list = c()
+mtry_list = c()
+  
+for(mtry in 1:43){
+  rf = randomForest(HOME_TEAM_WINS ~ ., data = train_rf, mtry = mtry, ntree = 128, importance = TRUE)
+  rf_pred = predict(rf, test_rf)
+  cm_rf_base = table(test_rf$HOME_TEAM_WINS, rf_pred)
+  mse_rf_base = (cm_rf_base[1,2] + cm_rf_base[2,1]) / (cm_rf_base[1,1] + cm_rf_base[1,2] + cm_rf_base[2,1] + cm_rf_base[2,2])
+  mse_list = append(mse_list, mse_rf_base)
+  mtry_list = append(mtry_list, mtry)
+}
+
+df = data.frame(M = mtry_list, MSE = mse_list)
+print(df)
+
+#mtry = 27 
+```
+
+```{r}
+plot(x = mtry_list, y = mse_list, xlab = "mtry", ylab = "Test MSE", type = "b")
+```
+
+
+```{r}
+#Base Random Forest
+library(randomForest)
+set.seed(1)
+rf_base = randomForest(HOME_TEAM_WINS ~ ., data = train_rf, mtry = 27, ntree = 128, importance = TRUE)
+rf_pred_base =  predict(rf_base, test_rf, type = "response") 
+
+cm_rf_base = table(test_rf$HOME_TEAM_WINS, rf_pred_base)
+mse_rf_base = (cm_rf_base[1,2] + cm_rf_base[2,1]) / (cm_rf_base[1,1] + cm_rf_base[1,2] + cm_rf_base[2,1] + cm_rf_base[2,2])
+
+accuracy_rf_base = mean(rf_pred_base == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Base Random Forest: ", round(mse_rf_base,4)))
+print(cm_rf_base)
+print(paste("Base Random Forest Accuracy: ", round(accuracy_rf_base,4)))
+
+```
+
+```{r}
+#Variation 2
+set.seed(1)
+rf_2 = randomForest(HOME_TEAM_WINS ~ . - GAME_DATE_EST - SEASON - HT_G - AT_G - TOT_PTS_AWAY -  TOT_PTS_HOME - TOT_REB_HOME - TOT_AST_HOME - TOT_REB_AWAY - TOT_AST_AWAY, data = train_rf, mtry = 17, ntree = 128, importance = TRUE)
+rf_pred_2 =  predict(rf_2, test_rf, type = "response") 
+
+cm_rf_2 = table(test_rf$HOME_TEAM_WINS, rf_pred_2)
+mse_rf_2 = (cm_rf_2[1,2] + cm_rf_2[2,1]) / (cm_rf_2[1,1] + cm_rf_2[1,2] + cm_rf_2[2,1] + cm_rf_2[2,2])
+
+accuracy_rf_2 = mean(rf_pred_2 == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Variation 2 Random Forest: ", round(mse_rf_2,4)))
+print(cm_rf_2)
+print(paste("Variation 2 Random Forest Accuracy: ", round(accuracy_rf_2,4)))
+```
+
+```{r}
+#Variation 3
+set.seed(1)
+rf_3 = randomForest(HOME_TEAM_WINS ~ . - GAME_DATE_EST - HT_HOME_W_PCT - HT_ROAD_W_PCT - HT_W_PCT - TOT_PTS_HOME - SEASON - HT_G - TOT_REB_HOME - PTLast3_Home - AT_G - FG_PCTLast3_Home - AT_W_PCT - AT_HOME_W_PCT - AT_ROAD_W_PCT - TOT_PTS_AWAY - TOT_AST_AWAY - TOT_REB_AWAY, data = train_rf, mtry = 10, ntree = 128, importance = TRUE)
+rf_pred_3 =  predict(rf_3, test_rf, type = "response") 
+
+cm_rf_3 = table(test_rf$HOME_TEAM_WINS, rf_pred_3)
+mse_rf_3 = (cm_rf_3[1,2] + cm_rf_3[2,1]) / (cm_rf_3[1,1] + cm_rf_3[1,2] + cm_rf_3[2,1] + cm_rf_3[2,2])
+
+accuracy_rf_3 = mean(rf_pred_3 == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Variation 3 Random Forest: ", round(mse_rf_3,4)))
+print(cm_rf_3)
+print(paste("Variation 3 Random Forest Accuracy: ", round(accuracy_rf_3,4)))
+```
+
+```{r}
+#XGBoost
+library(xgboost)
+library(mlr)
+
+#convert characters to factors
+fact_col = colnames(train)[sapply(train,is.character)]
+
+for(i in fact_col) set(train,j=i,value = factor(train[[i]]))
+for (i in fact_col) set(test,j=i,value = factor(test[[i]]))
+
+#create tasks
+traintask = makeClassifTask (data = train,target = "HOME_TEAM_WINS")
+testtask = makeClassifTask (data = test,target = "HOME_TEAM_WINS")
+
+#do one hot encoding`<br/> 
+traintask = createDummyFeatures (obj = traintask) 
+testtask = createDummyFeatures (obj = testtask)
+```
+
+```{r}
+library(mlr3)
+#create learner
+lrn = makeLearner("classif.xgboost",predict.type = "response")
+lrn$par.vals = list( objective="binary:logistic", eval_metric="error", nrounds=100L, eta=0.1)
+
+#set parameter space
+params = makeParamSet( makeDiscreteParam("booster",values = c("gbtree","gblinear")), makeIntegerParam("max_depth",lower = 3L,upper = 10L), makeNumericParam("min_child_weight",lower = 1L,upper = 10L), makeNumericParam("subsample",lower = 0.5,upper = 1), makeNumericParam("colsample_bytree",lower = 0.5,upper = 1))
+
+#set resampling strategy
+rdesc = makeResampleDesc("CV",stratify = T,iters=5L)
+
+#search strategy
+ctrl = makeTuneControlRandom(maxit = 10L)
+```
+
+```{r}
+#set parallel backend
+set.seed(1)
+library(parallel)
+library(parallelMap) 
+parallelStartSocket(cpus = detectCores())
+
+#parameter tuning
+mytune = tuneParams(learner = lrn, task = traintask, resampling = rdesc, measures = acc, par.set = params, control = ctrl, show.info = T)
+mytune$y 
+```
+
+```{r}
+#Base Model
+library(caret)
+set.seed(1)
+#set hyperparameters
+lrn_tune = setHyperPars(lrn,par.vals = mytune$x)
+
+#train model
+xgmodel_base = mlr::train(learner = lrn_tune,task = traintask)
+
+#predict model
+xgpred_base = predict(xgmodel_base,testtask)
+
+confusionMatrix(xgpred_base$data$response,xgpred_base$data$truth)
+```
+
+```{r}
+#Variation 2
+train_2 = train[, !names(train) %in% c("GAME_DATE_EST", "SEASON", "HT_G", "AT_G", "TOT_PTS_AWAY", "TOT_PTS_HOME", "TOT_REB_HOME", "TOT_AST_HOME", "TOT_REB_AWAY", "TOT_AST_AWAY")]
+test_2 = test[, !names(test) %in% c("GAME_DATE_EST", "SEASON", "HT_G", "AT_G", "TOT_PTS_AWAY", "TOT_PTS_HOME", "TOT_REB_HOME", "TOT_AST_HOME", "TOT_REB_AWAY", "TOT_AST_AWAY")]
+
+#convert characters to factors
+fact_col = colnames(train_2)[sapply(train_2,is.character)]
+
+for(i in fact_col) set(train_2,j=i,value = factor(train_2[[i]]))
+for (i in fact_col) set(test_2,j=i,value = factor(test_2[[i]]))
+
+#create tasks
+traintask_2 = makeClassifTask (data = train_2, target = "HOME_TEAM_WINS")
+testtask_2 = makeClassifTask (data = test_2, target = "HOME_TEAM_WINS")
+
+#do one hot encoding`<br/> 
+traintask_2 = createDummyFeatures (obj = traintask_2) 
+testtask_2 = createDummyFeatures (obj = testtask_2)
+```
+
+```{r}
+set.seed(3)
+xgmodel_2 = mlr::train(learner = lrn_tune,task = traintask_2)
+
+xgpred_2 = predict(xgmodel_2,testtask_2)
+
+confusionMatrix(xgpred_2$data$response,xgpred_2$data$truth)
+```
+
+```{r}
+#Variation 3
+train_3 = train[, !names(train) %in% c("GAME_DATE_EST", "HT_HOME_W_PCT", "HT_ROAD_W_PCT", "HT_W_PCT", "TOT_PTS_HOME", "SEASON", "HT_G", "TOT_REB_HOME", "PTLast3_Home", "AT_G", "FG_PCTLast3_Home", "AT_W_PCT", "AT_HOME_W_PCT", "AT_ROAD_W_PCT", "TOT_PTS_AWAY", "TOT_AST_AWAY", "TOT_REB_AWAY")]
+
+test_3 = test[, !names(test) %in% c("GAME_DATE_EST", "HT_HOME_W_PCT", "HT_ROAD_W_PCT", "HT_W_PCT", "TOT_PTS_HOME", "SEASON", "HT_G", "TOT_REB_HOME", "PTLast3_Home", "AT_G", "FG_PCTLast3_Home", "AT_W_PCT", "AT_HOME_W_PCT", "AT_ROAD_W_PCT", "TOT_PTS_AWAY", "TOT_AST_AWAY", "TOT_REB_AWAY")]
+
+#convert characters to factors
+fact_col = colnames(train_3)[sapply(train_3,is.character)]
+
+for(i in fact_col) set(train_3,j=i,value = factor(train_3[[i]]))
+for (i in fact_col) set(test_3,j=i,value = factor(test_3[[i]]))
+
+#create tasks
+traintask_3 = makeClassifTask (data = train_3, target = "HOME_TEAM_WINS")
+testtask_3 = makeClassifTask (data = test_3, target = "HOME_TEAM_WINS")
+
+#do one hot encoding`<br/> 
+traintask_3 = createDummyFeatures (obj = traintask_3) 
+testtask_3 = createDummyFeatures (obj = testtask_3)
+```
+
+```{r}
+set.seed(3)
+xgmodel_3 = mlr::train(learner = lrn_tune,task = traintask_3)
+
+xgpred_3 = predict(xgmodel_3,testtask_3)
+
+confusionMatrix(xgpred_3$data$response,xgpred_3$data$truth)
+```
+
+
+```{r}
+#SVM
+library(e1071)
+set.seed(1)
+train_SVM_tuning = train_log[sample(nrow(train_log), 1000), ]
+
+#Linear Tuned Model
+tune.out_l = e1071::tune(svm, HOME_TEAM_WINS ~ ., data = train_SVM_tuning , kernel = "linear", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
+bestmod_l = tune.out_l$best.model
+summary(tune.out_l)
+summary(bestmod_l)
+
+#cost = 0.1
+#gamma = 0.02325581
+#best performance: 0.1960649
+```
+
+```{r}
+set.seed(1)
+#Non-Lnear Tuned Model
+tune.out_n = tune(svm, HOME_TEAM_WINS ~ ., data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
+bestmod_n = tune.out_n$best.model
+summary(tune.out_n)
+summary(bestmod_n)
+
+#cost = 1
+#gamma = 0.02325581
+#best performance: 0.1877852
+```
+
+```{r}
+#Base Model with Radial Kernel
+library(e1071)
+set.seed(1)
+svm_base = svm(HOME_TEAM_WINS ~ ., data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+probs_svm_base = ifelse(predict(svm_base, newdata = test_log, type = "response") > 0.5, 1, 0)
+table_svm_base = table(pred = probs_svm_base, truth = test_log$HOME_TEAM_WINS)
+
+mse_svm_base = (table_svm_base[1,2] + table_svm_base[2,1]) / (table_svm_base[1,1] + table_svm_base[1,2] + table_svm_base[2,1] + table_svm_base[2,2])
+
+accuracy_svm_base = mean(probs_svm_base == test_log$HOME_TEAM_WINS)
+```
+
+```{r}
+print(paste("Test Error for Base SVM with Radial Kernel: ", round(mse_svm_base,4)))
+print(table_svm_base)
+print(paste("Base SVM with Radial Kernel Accuracy: ", round(accuracy_svm_base,4)))
+```
+
+```{r}
+tune.out_n1 = tune(svm, HOME_TEAM_WINS ~ .+ poly(AVG_PT_DIF_HOME, 6), data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
+bestmod_n1 = tune.out_n1$best.model
+summary(tune.out_n1)
+summary(bestmod_n1)
+```
+
+```{r}
+#Variation 1 - SVM
+library(e1071)
+set.seed(1)
+#svm_1 = svm(HOME_TEAM_WINS ~ . + + poly(HT_HOME_W_PCT, 4), data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+#svm_1 = svm(HOME_TEAM_WINS ~ . + poly(AVG_PT_DIF_HOME, 6), data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+
+svm_1 = svm(HOME_TEAM_WINS ~ . + poly(AVG_PT_DIF_AWAY, 3), data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+
+probs_svm_1 = ifelse(predict(svm_1, newdata = test_log, type = "response") > 0.5, 1, 0)
+table_svm_1 = table(pred = probs_svm_1, truth = test_log$HOME_TEAM_WINS)
+
+mse_svm_1 = (table_svm_1[1,2] + table_svm_1[2,1]) / (table_svm_1[1,1] + table_svm_1[1,2] + table_svm_1[2,1] + table_svm_1[2,2])
+
+accuracy_svm_1 = mean(probs_svm_1 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Variation 1 SVM with Radial Kernel: ", round(mse_svm_1,4)))
+print(table_svm_1)
+print(paste("Variation 1 SVM with Radial Kernel Accuracy: ", round(accuracy_svm_1,4)))
+```
+
+```{r}
+#Variation 2 - SVM
+set.seed(1)
+svm_2 = svm(HOME_TEAM_WINS ~ . - GAME_DATE_EST - SEASON - HT_G - AT_G - TOT_PTS_AWAY -  TOT_PTS_HOME - TOT_REB_HOME - TOT_AST_HOME - TOT_REB_AWAY - TOT_AST_AWAY, data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+probs_svm_2 = ifelse(predict(svm_2, newdata = test_log, type = "response") > 0.5, 1, 0)
+table_svm_2 = table(pred = probs_svm_2, truth = test_log$HOME_TEAM_WINS)
+
+mse_svm_2 = (table_svm_2[1,2] + table_svm_2[2,1]) / (table_svm_2[1,1] + table_svm_2[1,2] + table_svm_2[2,1] + table_svm_2[2,2])
+
+accuracy_svm_2 = mean(probs_svm_2 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Variation 2 SVM with Radial Kernel: ", round(mse_svm_2,4)))
+print(table_svm_2)
+print(paste("Variation 2 SVM with Radial Kernel Accuracy: ", round(accuracy_svm_2,4)))
+```
+
+```{r}
+#Variation 3 - SVM
+set.seed(1)
+svm_3 = svm(HOME_TEAM_WINS ~ . - GAME_DATE_EST - HT_HOME_W_PCT - HT_ROAD_W_PCT - HT_W_PCT - TOT_PTS_HOME - SEASON - HT_G - TOT_REB_HOME - PTLast3_Home - AT_G - FG_PCTLast3_Home - AT_W_PCT - AT_HOME_W_PCT - AT_ROAD_W_PCT - TOT_PTS_AWAY - TOT_AST_AWAY - TOT_REB_AWAY, data = train_log, cost = 1, gamma = 0.02325581, kernel = "radial")
+probs_svm_3 = ifelse(predict(svm_3, newdata = test_log, type = "response") > 0.5, 1, 0)
+table_svm_3 = table(pred = probs_svm_3, truth = test_log$HOME_TEAM_WINS)
+
+mse_svm_3 = (table_svm_3[1,2] + table_svm_3[2,1]) / (table_svm_3[1,1] + table_svm_3[1,2] + table_svm_3[2,1] + table_svm_3[2,2])
+
+accuracy_svm_3 = mean(probs_svm_3 == test_log$HOME_TEAM_WINS)
+
+print(paste("Test Error for Variation 3 SVM with Radial Kernel: ", round(mse_svm_3,4)))
+print(table_svm_3)
+print(paste("Variation 3 SVM with Radial Kernel Accuracy: ", round(accuracy_svm_3,4)))
+```
+
+```{r}
+#Gaussian Naive Bayes - Base
+library(e1071)
+set.seed(1)
+
+bay_base = naiveBayes(HOME_TEAM_WINS ~ ., data = train)
+pred_bay_base = predict(bay_base, test)
+table_bay_base = table(pred_bay_base, test$HOME_TEAM_WINS)
+
+test_error_bay_base = (table_bay_base[1,2]+table_bay_base[2,1])/(table_bay_base[1,1]+table_bay_base[2,2]+table_bay_base[1,2]+table_bay_base[2,1])
+accuracy_bay_base = mean(pred_bay_base == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Naive Bayes: ", round(test_error_bay_base,4)))
+print(table_bay_base)
+print(paste("Base Naive Bayes Accuracy", round(accuracy_bay_base,4)))
+```
+```{r}
+#Gaussian Naive Bayes - Variation 2
+set.seed(1)
+
+bay_2 = naiveBayes(HOME_TEAM_WINS ~ . - GAME_DATE_EST - SEASON - HT_G - AT_G - TOT_PTS_AWAY -  TOT_PTS_HOME - TOT_REB_HOME - TOT_AST_HOME - TOT_REB_AWAY - TOT_AST_AWAY, data = train)
+pred_bay_2 = predict(bay_2, test)
+table_bay_2 = table(pred_bay_2, test$HOME_TEAM_WINS)
+
+test_error_bay_2 = (table_bay_2[1,2]+table_bay_2[2,1])/(table_bay_2[1,1]+table_bay_2[2,2]+table_bay_2[1,2]+table_bay_2[2,1])
+accuracy_bay_2 = mean(pred_bay_2 == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Naive Bayes: ", round(test_error_bay_2,4)))
+print(table_bay_2)
+print(paste("Variation 2 Naive Bayes Accuracy", round(accuracy_bay_2,4)))
+```
+
+```{r}
+#Gaussian Naive Bayes - Variation 3
+set.seed(1)
+
+bay_3 = naiveBayes(HOME_TEAM_WINS ~ . - GAME_DATE_EST - HT_HOME_W_PCT - HT_ROAD_W_PCT - HT_W_PCT - TOT_PTS_HOME - SEASON - HT_G - TOT_REB_HOME - PTLast3_Home - AT_G - FG_PCTLast3_Home - AT_W_PCT - AT_HOME_W_PCT - AT_ROAD_W_PCT - TOT_PTS_AWAY - TOT_AST_AWAY - TOT_REB_AWAY , data = train)
+pred_bay_3 = predict(bay_3, test)
+table_bay_3 = table(pred_bay_3, test$HOME_TEAM_WINS)
+
+test_error_bay_3 = (table_bay_3[1,2]+table_bay_3[2,1])/(table_bay_3[1,1]+table_bay_3[2,2]+table_bay_3[1,2]+table_bay_3[2,1])
+accuracy_bay_3 = mean(pred_bay_3 == test$HOME_TEAM_WINS)
+
+print(paste("Test Error for Naive Bayes: ", round(test_error_bay_3,4)))
+print(table_bay_3)
+print(paste("Variation 3 Naive Bayes Accuracy", round(accuracy_bay_3,4)))
+```
