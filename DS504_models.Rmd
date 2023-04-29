@@ -483,7 +483,7 @@ summary(bestmod_l)
 ```{r}
 set.seed(1)
 #Non-Lnear Tuned Model
-tune.out_n = tune(svm, HOME_TEAM_WINS ~ ., data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
+tune.out_n = e1071::tune(svm, HOME_TEAM_WINS ~ ., data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
 bestmod_n = tune.out_n$best.model
 summary(tune.out_n)
 summary(bestmod_n)
@@ -513,7 +513,7 @@ print(paste("Base SVM with Radial Kernel Accuracy: ", round(accuracy_svm_base,4)
 ```
 
 ```{r}
-tune.out_n1 = tune(svm, HOME_TEAM_WINS ~ .+ poly(AVG_PT_DIF_HOME, 6), data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
+tune.out_n1 = e1071::tune(svm, HOME_TEAM_WINS ~ .+ poly(AVG_PT_DIF_HOME, 6), data = train_SVM_tuning, kernel = "radial", ranges = list (cost = c (0.001, 0.01, 0.1, 1, 5, 10, 100)))
 bestmod_n1 = tune.out_n1$best.model
 summary(tune.out_n1)
 summary(bestmod_n1)
